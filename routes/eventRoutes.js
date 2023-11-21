@@ -3,7 +3,7 @@ const router = express.Router();
 const EventDetail = require('../models/EventDetail'); // Adjust the path as per your project structure
 const QRCode = require('qrcode');
 const pdf = require('html-pdf');
-
+const puppeteer = require('puppeteer');
 // Route to add a new event
 router.post('/add-event', async (req, res) => {
     try {
@@ -88,9 +88,10 @@ router.delete('/delete-event/:id', async (req, res) => {
     }
 });
 
+
 // router.post('/book-event/:eventId', async (req, res) => {
 //     try {
-//         const { seatsToBook ,userId} = req.body;
+//         const { seatsToBook, userId } = req.body;
 //         const seatsNumber = parseInt(seatsToBook, 10);
 
 //         if (isNaN(seatsNumber) || seatsNumber <= 0) {
@@ -98,45 +99,48 @@ router.delete('/delete-event/:id', async (req, res) => {
 //         }
 
 //         const event = await EventDetail.findById(req.params.eventId);
-//         if (!event) {
-//             return res.status(404).json({ message: "Event not found." });
+//         if (!event || event.totalEntries < seatsNumber) {
+//             return res.status(400).json({ message: "Insufficient seats available." });
 //         }
 
-//         if (event.totalEntries < seatsNumber) {
-//             return res.status(400).json({ message: "Insufficient seats available.", availableSeats: event.totalEntries });
-//         }
-
-//         event.totalEntries -= seatsNumber; // Subtract the booked seats from totalEntries
+//         event.totalEntries -= seatsNumber;
 //         await event.save();
 
-//         // Generate QR code and ticket logic...
 //         let ticketData = {
-//             userId: userId, // Assuming this is the user's ID
+//             userId: userId,
 //             eventName: event.name,
 //             seatsBooked: seatsNumber,
-//             eventDate: event.fromDate.toISOString().split('T')[0], // example formatting
+//             eventDate: event.fromDate.toISOString().split('T')[0]
 //         };
 
-//         QRCode.toDataURL(JSON.stringify(ticketData), async function (err, url) {
+//         QRCode.toDataURL(JSON.stringify(ticketData), function (err, qrCodeUrl) {
 //             if (err) {
 //                 console.error(err);
 //                 return res.status(500).json({ message: "Error generating QR code." });
 //             }
-
-//             // Include QR code URL in ticket data
-//             ticketData.qrCodeUrl = url;
 
 //             let htmlContent = `
 //             <html>
 //             <body>
 //                 <h1>${ticketData.eventName}</h1>
 //                 <p>Date: ${ticketData.eventDate}</p>
+//                 <p>UserID: ${ticketData.userId}</p>
 //                 <p>Seats: ${ticketData.seatsBooked}</p>
-//                 <img src="${ticketData.qrCodeUrl}" alt="QR Code" />
+//                 <img src="${qrCodeUrl}" alt="QR Code" />
 //             </body>
 //             </html>`;
 
-//             res.json({ message: "Booking successful", ticketData: ticketData });
+//             // Convert to PDF
+//             pdf.create(htmlContent).toBuffer(function (pdfErr, buffer) {
+//                 if (pdfErr) {
+//                     console.error(pdfErr);
+//                     return res.status(500).json({ message: "Error generating PDF." });
+//                 }
+
+//                 // Send buffer as a downloadable response
+//                 res.type('pdf');
+//                 res.end(buffer, 'binary');
+//             });
 //         });
 
 //     } catch (error) {
@@ -170,42 +174,32 @@ router.post('/book-event/:eventId', async (req, res) => {
             eventDate: event.fromDate.toISOString().split('T')[0]
         };
 
-        QRCode.toDataURL(JSON.stringify(ticketData), function (err, qrCodeUrl) {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ message: "Error generating QR code." });
-            }
+        const browser = await puppeteer.launch();
+        const page = await browser.newPage();
 
-            let htmlContent = `
+        const content = `
             <html>
             <body>
                 <h1>${ticketData.eventName}</h1>
                 <p>Date: ${ticketData.eventDate}</p>
                 <p>UserID: ${ticketData.userId}</p>
                 <p>Seats: ${ticketData.seatsBooked}</p>
-                <img src="${qrCodeUrl}" alt="QR Code" />
             </body>
             </html>`;
 
-            // Convert to PDF
-            pdf.create(htmlContent).toBuffer(function (pdfErr, buffer) {
-                if (pdfErr) {
-                    console.error(pdfErr);
-                    return res.status(500).json({ message: "Error generating PDF." });
-                }
+        await page.setContent(content);
+        const pdfBuffer = await page.pdf();
 
-                // Send buffer as a downloadable response
-                res.type('pdf');
-                res.end(buffer, 'binary');
-            });
-        });
+        await browser.close();
 
+        // Send buffer as a downloadable response
+        res.type('pdf');
+        res.end(pdfBuffer, 'binary');
     } catch (error) {
         console.error("Error booking event:", error);
         res.status(500).json({ message: error.message });
     }
 });
-
 
 
 

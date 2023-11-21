@@ -18,9 +18,9 @@
     "html-pdf": "^3.0.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.0",
+    "puppeteer": "^21.5.2",
     "qrcode": "^1.5.3"
   },
-
   "engines": {
     "node": ">=16.20.1"
   }
